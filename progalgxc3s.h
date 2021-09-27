@@ -47,6 +47,7 @@ Dmitry Teytelman [dimtey@gmail.com] 14 Jun 2006 [applied 13 Aug 2006]:
 #define FAMILY_XC3SD    0x1c
 #define FAMILY_XC6S     0x20
 #define FAMILY_XC5VTXT  0x22
+#define FAMILY_XCKU5P   0x25
 
 class ProgAlgXC3S
 {

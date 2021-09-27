@@ -900,7 +900,8 @@ int main(int argc, char **args)
           (family == FAMILY_XC5VSXT) ||
           (family == FAMILY_XC5VFXT) ||
           (family == FAMILY_XC5VTXT) ||
-          (family == FAMILY_XC7)
+          (family == FAMILY_XC7) ||
+          (family == FAMILY_XCKU5P)
 	  )
           return  programXC3S(jtag, argc, args, verbose,
                               reconfigure, family);
