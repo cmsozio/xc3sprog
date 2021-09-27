@@ -62,6 +62,7 @@ ProgAlgXC3S::ProgAlgXC3S(Jtag &j, int fam)
     case FAMILY_XC5VFXT:
     case FAMILY_XC5VTXT:
     case FAMILY_XC7:
+    case FAMILY_XCKU5P:
       tck_len = 12;
       array_transfer_len = 32;
       break;
@@ -173,6 +174,21 @@ void ProgAlgXC3S::flow_program_xc2s(BitFile &file)
     return;
   }
 
+void ProgAlgXC3S::flow_program_xcu(BitFile &file)
+{
+    Timer timer;
+
+    // Set TAP State to Test-Logic-Reset (TLR)
+    jtag->tapTestLogicReset();
+
+    // config/idcode 
+    unsigned char tdo[32];
+    byte read_idcode[] = {0x09};
+    jtag->shiftIR(read_idcode, 0);
+    jtag->shiftDR(0, tdo, 32);
+    fprintf(stderr, "IDCODE: %s\n", tdo);
+}
+
 void ProgAlgXC3S::flow_program_legacy(BitFile &file)
 {
   Timer timer;
@@ -205,6 +221,9 @@ void ProgAlgXC3S::array_program(BitFile &file)
 
   if (family == FAMILY_XC2S || family == FAMILY_XC2SE)
       return flow_program_xc2s(file);
+
+  if (family == FAMILY_XCKU5P)
+      return flow_program_xcu(file);
   
   flow_enable();
 
