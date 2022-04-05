@@ -59,13 +59,14 @@ class ProgAlgXC3S
   void flow_enable();
   void flow_disable();
   void flow_program_xc2s(BitFile &file);
-  void flow_program_xcu(BitFile &file);
   void flow_array_program(BitFile &file);
   void flow_program_legacy(BitFile &file);
  public:
   ProgAlgXC3S(Jtag &j, int family);
   void array_program(BitFile &file);
   void reconfig();
+  void readwbstar();
+  void program_key();
 };
 
 

@@ -34,6 +34,7 @@ Dmitry Teytelman [dimtey@gmail.com] 14 Jun 2006 [applied 13 Aug 2006]:
  */
 static const byte JPROGRAM[2]    = { 0xcb, 0xff };
 static const byte CFG_IN[2]      = { 0xc5, 0xff };
+static const byte CFG_OUT[2]     = { 0xc4, 0xff };
 static const byte JSHUTDOWN[2]   = { 0xcd, 0xff };
 static const byte JSTART[2]      = { 0xcc, 0xff };
 static const byte ISC_PROGRAM[2] = { 0xd1, 0xff };
@@ -41,6 +42,12 @@ static const byte ISC_ENABLE[2]  = { 0xd0, 0xff };
 static const byte ISC_DISABLE[2] = { 0xd6, 0xff };
 static const byte BYPASS[2]      = { 0xff, 0xff };
 static const byte ISC_DNA[1]     = { 0x31 };
+/*
+ * Unkown SHIFT_IR commands
+ */
+static const byte FIRST_KEY[1]   = { 0x02 };
+static const byte SECOND_KEY[1]  = { 0x12 };
+static const byte THIRD_KEY[1]   = { 0x22 };
 
 
 ProgAlgXC3S::ProgAlgXC3S(Jtag &j, int fam)
@@ -62,7 +69,6 @@ ProgAlgXC3S::ProgAlgXC3S(Jtag &j, int fam)
     case FAMILY_XC5VFXT:
     case FAMILY_XC5VTXT:
     case FAMILY_XC7:
-    case FAMILY_XCKU5P:
       tck_len = 12;
       array_transfer_len = 32;
       break;
@@ -110,7 +116,7 @@ void ProgAlgXC3S::flow_array_program(BitFile &file)
 	  fflush(stderr);
 	}
     }
-  
+
   // Print the timing summary
   if (jtag->getVerbose())
     fprintf(stderr, " done. Programming time %.1f ms\n",
@@ -152,17 +158,17 @@ void ProgAlgXC3S::flow_program_xc2s(BitFile &file)
     jtag->shiftDR(xc2sbuf0,0, sizeof(xc2sbuf0) *8);
     jtag->shiftIR(JSTART);
     jtag->cycleTCK(13);
-    
+
     jtag->shiftIR(CFG_IN);
     jtag->shiftDR(xc2sbuf1,0, sizeof(xc2sbuf1) *8);
     jtag->shiftIR(JSTART);
     jtag->cycleTCK(13);
-    
+
     jtag->shiftIR(CFG_IN);
     jtag->shiftDR(xc2sbuf0,0, sizeof(xc2sbuf0) *8);
     jtag->shiftIR(JSTART);
     jtag->cycleTCK(13);
-    
+
     jtag->shiftIR(CFG_IN);
     jtag->shiftDR((file.getData()),0,file.getLength());
     jtag->cycleTCK(1);
@@ -173,21 +179,6 @@ void ProgAlgXC3S::flow_program_xc2s(BitFile &file)
     jtag->cycleTCK(1);
     return;
   }
-
-void ProgAlgXC3S::flow_program_xcu(BitFile &file)
-{
-    Timer timer;
-
-    // Set TAP State to Test-Logic-Reset (TLR)
-    jtag->tapTestLogicReset();
-
-    // config/idcode 
-    unsigned char tdo[32];
-    byte read_idcode[] = {0x09};
-    jtag->shiftIR(read_idcode, 0);
-    jtag->shiftDR(0, tdo, 32);
-    fprintf(stderr, "IDCODE: %s\n", tdo);
-}
 
 void ProgAlgXC3S::flow_program_legacy(BitFile &file)
 {
@@ -205,14 +196,14 @@ void ProgAlgXC3S::flow_program_legacy(BitFile &file)
   data[0]=0x0;
   jtag->shiftDR(data,0,1);
   jtag->cycleTCK(1);
-  
+
   // Print the timing summary
   if (jtag->getVerbose())
     {
       fprintf(stderr, "done. Programming time %.1f ms\n",
 	      timer.elapsed() * 1000);
     }
- 
+
 }
 void ProgAlgXC3S::array_program(BitFile &file)
 {
@@ -222,9 +213,6 @@ void ProgAlgXC3S::array_program(BitFile &file)
   if (family == FAMILY_XC2S || family == FAMILY_XC2SE)
       return flow_program_xc2s(file);
 
-  if (family == FAMILY_XCKU5P)
-      return flow_program_xcu(file);
-  
   flow_enable();
 
   /* JPROGAM: Triger reconfiguration, not explained in ug332, but
@@ -249,8 +237,8 @@ void ProgAlgXC3S::array_program(BitFile &file)
 	jtag->cycleTCK(1);
 	if (*(long long*)data != -1LL)
 	  /* ISC_DNA only works on a unconfigured device, see AR #29977*/
-	  fprintf(stderr, "DNA is 0x%02x%02x%02x%02x%02x%02x%02x%02x\n", 
-		 data[0], data[1], data[2], data[3], 
+	  fprintf(stderr, "DNA is 0x%02x%02x%02x%02x%02x%02x%02x%02x\n",
+		 data[0], data[1], data[2], data[3],
 		 data[4], data[5], data[6], data[7]);
 	break;
       }
@@ -273,10 +261,10 @@ void ProgAlgXC3S::array_program(BitFile &file)
       jtag->Usleep(1000);
       i++;
     }
-  if (i == 50)
-    fprintf(stderr, 
-	    "Device failed to configure, INSTRUCTION_CAPTURE is 0x%02x\n",
-	    buf[0]);
+  //if (i == 50)
+    //fprintf(stderr,
+	    //"Device failed to configure, INSTRUCTION_CAPTURE is 0x%02x\n",
+	    //buf[0]);
 }
 
 void ProgAlgXC3S::reconfig(void)
@@ -333,4 +321,76 @@ void ProgAlgXC3S::reconfig(void)
   jtag->cycleTCK(1);
   jtag->setTapState(Jtag::TEST_LOGIC_RESET);
 }
+
+void ProgAlgXC3S::readwbstar()
+{
+  unsigned char tdo[32];
+  jtag->shiftIR(CFG_IN); //shift cfg_in instruction, xc3sprog automatically switches states
+  byte readwbstarbit[] =
+        {
+            0x55, 0x99, 0xaa, 0x66,
+            0x14, 0x40, 0x00, 0x80, 
+            0x04, 0x00, 0x00, 0x00, 
+            0x04, 0x00, 0x00, 0x00, 
+        };
+  jtag->shiftDR(readwbstarbit,0, sizeof(readwbstarbit) *8); //shift config packet into into cfg_in register
+  jtag->shiftIR(CFG_OUT); //shift cfg_out instruction
+
+  jtag->shiftDR(0,tdo,32); //shift out 8*4=32 bits of register and save to tdo variable
+  
+  char* fname = "rb_data";
+  FILE *fptr;
+  fptr = fopen(fname,"wb");
+  if(fptr==0) {
+  fprintf(stderr,"Cannot open file");
+  return;
+  }
+  
+  for (int i=0; i<4; i++){
+    byte b=tdo[i];
+    fwrite(&b,1,1,fptr);
+  }
+  fclose(fptr);
+
+  //jtag->setTapState(Jtag::TEST_LOGIC_RESET);
+  jtag->shiftIR(JPROGRAM);
+  jtag->shiftIR(CFG_IN);
+ }
+
+void ProgAlgXC3S::program_key(void) {
+	unsigned char tdo[32];
+	byte first_step[] = { 0x15 };
+	byte second_step[] = { 0xff, 0xff, 0xff, 0xff };
+	byte third_step[] = { 0x00, 0x00, 0xaa, 0xde };
+	byte key[] = 
+		{
+			0x48, 0x2c, 0x6a, 0x1e,
+			0xd5, 0xb3, 0x3b, 0x5d,
+		};
+	byte end[] = { 0xdf, 0x82, 0x5f, 0x42 };
+	/* Setup */
+	jtag->shiftIR(FIRST_KEY);
+	jtag->shiftDR(first_step,0,sizeof(first_step)*8);
+	jtag->shiftIR(SECOND_KEY);
+	jtag->shiftDR(second_step,0,sizeof(second_step)*8);
+	jtag->shiftIR(THIRD_KEY);
+	jtag->shiftDR(third_step,0,sizeof(third_step)*8);
+
+	/* Key */
+	jtag->shiftIR(THIRD_KEY);
+	jtag->shiftDR(key,0,sizeof(key)*8);
+	jtag->shiftIR(THIRD_KEY);
+	jtag->shiftDR(key,0,sizeof(key)*8);
+	jtag->shiftIR(THIRD_KEY);
+	jtag->shiftDR(key,0,sizeof(key)*8);
+	jtag->shiftIR(THIRD_KEY);
+	jtag->shiftDR(key,0,sizeof(key)*8);
+
+	/* End */
+	jtag->shiftIR(THIRD_KEY);
+	jtag->shiftDR(end,0,sizeof(end)*8);
+}
+  
+  
+
 
